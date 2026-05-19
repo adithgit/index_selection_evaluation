@@ -16,6 +16,7 @@ from selection.algorithms.relaxation_algorithm import RelaxationAlgorithm
 from selection.benchmark import Benchmark
 from selection.dbms.hana_dbms import HanaDatabaseConnector
 from selection.dbms.postgres_dbms import PostgresDatabaseConnector
+from selection.dbms.db2_dbms import DB2DatabaseConnector
 from selection.query_generator import QueryGenerator
 from selection.selection_algorithm import AllIndexesAlgorithm, NoIndexAlgorithm
 from selection.table_generator import TableGenerator
@@ -35,7 +36,11 @@ ALGORITHMS = {
     "all_indexes": AllIndexesAlgorithm,
 }
 
-DBMSYSTEMS = {"postgres": PostgresDatabaseConnector, "hana": HanaDatabaseConnector}
+DBMSYSTEMS = {
+    "postgres": PostgresDatabaseConnector, 
+    "hana": HanaDatabaseConnector,
+    "db2": DB2DatabaseConnector
+}
 
 
 class IndexSelection:

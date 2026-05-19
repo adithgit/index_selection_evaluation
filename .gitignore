@@ -21,3 +21,4 @@ benchmark_results/parameters_tpcds
 benchmark_results/**/*_runtime.pdf
 benchmark_results/**/*_what_if_graph.pdf
 benchmark_results/**/*_cost_estimation.pdf
+jobdata/*.jar
