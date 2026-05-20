@@ -35,6 +35,8 @@ class TableGenerator:
     def database_name(self):
         if self.explicit_database_name:
             return self.explicit_database_name
+        if self.db_connector.db_system == "db2":
+            return self.db_connector.db_name
 
         name = f"indexselection_{self.benchmark_name}___"
         name += str(self.scale_factor).replace(".", "_")
@@ -85,6 +87,13 @@ class TableGenerator:
 
     def create_tables(self, create_statements):
         logging.info("Creating tables")
+        if self.db_connector.db_system == "db2":
+            import re
+            # Map PostgreSQL varying char without length to DB2 VARCHAR(255)
+            create_statements = re.sub(r'character varying\b(?!\()', 'VARCHAR(255)', create_statements)
+            create_statements = create_statements.replace("character varying", "VARCHAR")
+            create_statements = create_statements.replace(" integer ", " INT ")
+            
         for create_statement in create_statements.split(";")[:-1]:
             self.db_connector.exec_only(create_statement)
         self.db_connector.commit()
@@ -94,13 +103,16 @@ class TableGenerator:
         for filename in self.table_files:
             logging.debug(f"    Loading file {filename}")
 
-            table = filename.replace(".tbl", "").replace(".dat", "")
+            table = filename.replace(".tbl", "").replace(".dat", "").replace(".csv", "")
             path = self.directory + "/" + filename
             size = os.path.getsize(path)
             size_string = f"{b_to_mb(size):,.4f} MB"
             logging.debug(f"    Import data of size {size_string}")
-            database_connector.import_data(table, path)
-            os.remove(os.path.join(self.directory, filename))
+            delimiter = "," if self.benchmark_name == "job" else "|"
+            database_connector.import_data(table, path, delimiter=delimiter)
+            
+            if self.benchmark_name != "job":
+                os.remove(os.path.join(self.directory, filename))
         database_connector.commit()
 
     def _run_make(self):
@@ -111,7 +123,7 @@ class TableGenerator:
             logging.info("No need to run make")
 
     def _table_files(self):
-        self.table_files = [x for x in self._files() if ".tbl" in x or ".dat" in x]
+        self.table_files = [x for x in self._files() if ".tbl" in x or ".dat" in x or ".csv" in x]
 
     def _run_command(self, command):
         cmd_out = "[SUBPROCESS OUTPUT] "
@@ -154,5 +166,10 @@ class TableGenerator:
                 and self.scale_factor != 0.001
             ):
                 raise Exception("Wrong TPC-DS scale factor")
+        elif self.benchmark_name == "job":
+            self.make_command = []
+            self.directory = file_path + "/../jobdata"
+            self.create_table_statements_file = "schematext.sql"
+            self.cmd = []
         else:
-            raise NotImplementedError("only TPC-H/DS implemented.")
+            raise NotImplementedError("only TPC-H/DS and JOB implemented.")

@@ -115,3 +115,9 @@ class DatabaseConnector:
 
     def _drop_simulated_index(self, identifier):
         raise NotImplementedError
+
+    def estimate_index_size(self, index_oid):
+        raise NotImplementedError
+
+    def all_simulated_indexes(self):
+        raise NotImplementedError

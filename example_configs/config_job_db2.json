@@ -1,0 +1,33 @@
+{
+    "database_system": "db2",
+    "database_name": "imdb",
+    "benchmark_name": "JOB",
+    "scale_factor": 1,
+    "algorithms": [
+        {
+            "name": "db2advis",
+            "parameters": {
+                "max_index_width": 2,
+                "budget_MB": [
+                    250,
+                    500,
+                    1000,
+                    1750,
+                    2500,
+                    3000,
+                    3500,
+                    4000,
+                    4500,
+                    5000,
+                    6250,
+                    7500,
+                    10000,
+                    12500,
+                    15000
+                ],
+                "try_variations_seconds": 0
+            },
+            "timeout": 300
+        }
+    ]
+}

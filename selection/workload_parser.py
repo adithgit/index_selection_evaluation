@@ -20,30 +20,51 @@ class WorkloadParser:
             return False
 
     def get_tables(self):
-        assert self.database_system == "postgres"
-        db_connector = PostgresDatabaseConnector(self.database_name)
-        result = db_connector.exec_fetchall(
-            "SELECT tablename FROM pg_catalog.pg_tables WHERE schemaname='public';"
-        )
-        table_names = [row[0] for row in result]
-
-        tables = {}
-
-        for table_name in table_names:
-            table = Table(table_name)
+        if self.database_system == "postgres":
+            from selection.dbms.postgres_dbms import PostgresDatabaseConnector
+            db_connector = PostgresDatabaseConnector(self.database_name)
             result = db_connector.exec_fetchall(
-                "SELECT column_name "
-                + "FROM information_schema.columns "
-                + "WHERE table_schema = 'public' "
-                + f"AND table_name = '{table_name}';"
+                "SELECT tablename FROM pg_catalog.pg_tables WHERE schemaname='public';"
             )
-            column_names = [row[0] for row in result]
-            for column_name in column_names:
-                table.add_column(Column(column_name))
+            table_names = [row[0] for row in result]
 
-            tables[table_name] = table
+            tables = {}
+            for table_name in table_names:
+                table = Table(table_name)
+                result = db_connector.exec_fetch(
+                    "SELECT column_name "
+                    + "FROM information_schema.columns "
+                    + "WHERE table_schema = 'public' "
+                    + f"AND table_name = '{table_name}';", False
+                )
+                column_names = [row[0] for row in result]
+                for column_name in column_names:
+                    table.add_column(Column(column_name))
+                tables[table_name] = table
+            return tables
+        elif self.database_system == "db2":
+            from selection.dbms.db2_dbms import DB2DatabaseConnector
+            db_connector = DB2DatabaseConnector(self.database_name)
+            db_connector.create_connection()
+            schema = db_connector.user.upper()
+            result = db_connector.exec_fetch(
+                f"SELECT TABNAME FROM SYSCAT.TABLES WHERE TABSCHEMA='{schema}' AND TYPE='T'", False
+            )
+            table_names = [row[0].lower() for row in result]
 
-        return tables
+            tables = {}
+            for table_name in table_names:
+                table = Table(table_name)
+                result = db_connector.exec_fetch(
+                    f"SELECT COLNAME FROM SYSCAT.COLUMNS WHERE TABSCHEMA='{schema}' AND TABNAME='{table_name.upper()}'", False
+                )
+                column_names = [row[0].lower() for row in result]
+                for column_name in column_names:
+                    table.add_column(Column(column_name))
+                tables[table_name] = table
+            return tables
+        else:
+            raise NotImplementedError(f"get_tables for {self.database_system}")
 
     def store_indexable_columns(self, query, tables):
         for table_name in tables:

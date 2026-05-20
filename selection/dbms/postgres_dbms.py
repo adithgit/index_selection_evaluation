@@ -124,6 +124,17 @@ class PostgresDatabaseConnector(DatabaseConnector):
 
         assert result[0] is True, f"Could not drop simulated index with oid = {oid}."
 
+    def estimate_index_size(self, index_oid):
+        statement = f"select hypopg_relation_size({index_oid})"
+        result = self.exec_fetch(statement)[0]
+        assert result > 0, "Hypothetical index does not exist."
+        return result
+
+    def all_simulated_indexes(self):
+        statement = "select * from hypopg_list_indexes()"
+        indexes = self.exec_fetch(statement, one=False)
+        return indexes
+
     def create_index(self, index):
         table_name = index.table()
         statement = (
