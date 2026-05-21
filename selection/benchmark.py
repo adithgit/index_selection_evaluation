@@ -218,7 +218,7 @@ class Benchmark:
             return
 
         identifier = (
-            f"{self.config['name']}_{self.benchmark_name}"
+            f"{self.config['name']}_{self.benchmark_name}_{self.db_system}"
             f"_{len(self.workload.queries)}"
         )
         self.filename = f"benchmark_results/results_{identifier}_queries.csv"

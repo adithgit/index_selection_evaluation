@@ -43,6 +43,7 @@ class CostEvaluation:
         plan = self.db_connector.get_plan(query)
         cost = plan["Total Cost"]
         plan_str = str(plan)
+        logging.info(f"DB2 Explain Plan for Query {query.nr}: {plan_str}")
 
         recommended_indexes = set()
 

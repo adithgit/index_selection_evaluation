@@ -150,7 +150,7 @@ class PostgresDatabaseConnector(DatabaseConnector):
 
     def drop_indexes(self):
         logging.info("Dropping indexes")
-        stmt = "select indexname from pg_indexes where schemaname='public'"
+        stmt = "select indexname from pg_indexes where schemaname='public' and indexname not in (select conname from pg_constraint where contype = 'p')"
         indexes = self.exec_fetch(stmt, one=False)
         for index in indexes:
             index_name = index[0]

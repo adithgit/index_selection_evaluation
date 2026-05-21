@@ -36,7 +36,10 @@ def get_utilized_indexes(
 ):
     utilized_indexes_workload = set()
     query_details = {}
+    # Remove  loggging when done
+    import logging
     for query, indexes in zip(workload.queries, indexes_per_query):
+        logging.info(f"Query {query}: checking {len(indexes)} candidate indexes")
         (
             utilized_indexes_query,
             cost_with_indexes,

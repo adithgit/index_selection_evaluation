@@ -52,24 +52,36 @@ class DB2AdvisAlgorithm(SelectionAlgorithm):
             self.parameters["max_index_width"],
             candidate_generator=syntactically_relevant_indexes,
         )
+        logging.info(f"Candidates generated: {len(candidates)}")
+        
         utilized_indexes, query_details = get_utilized_indexes(
             workload, candidates, self.cost_evaluation, True
         )
+        logging.info(f"Utilized indexes: {len(utilized_indexes)}")
 
         index_benefits = self._calculate_index_benefits(utilized_indexes, query_details)
+        logging.info(f"Index benefits calculated: {len(index_benefits)}")
+        
         index_benefits_subsumed = self._combine_subsumed(index_benefits)
+        logging.info(f"Index benefits subsumed: {len(index_benefits_subsumed)}")
+        
         selected_index_benefits = []
         disk_usage = 0
         for index_benefit in index_benefits_subsumed:
             if disk_usage + index_benefit.size() <= self.disk_constraint:
                 selected_index_benefits.append(index_benefit)
                 disk_usage += index_benefit.size()
+        logging.info(f"Selected index benefits (disk constraint): {len(selected_index_benefits)}")
 
         if self.try_variations_seconds > 0:
             selected_index_benefits = self._try_variations(
                 selected_index_benefits, index_benefits_subsumed, workload
             )
-        return [index_benefit.index for index_benefit in selected_index_benefits]
+            logging.info(f"Selected index benefits (after variations): {len(selected_index_benefits)}")
+            
+        final_indexes = [index_benefit.index for index_benefit in selected_index_benefits]
+        logging.info(f"Returning final best indexes: {final_indexes}")
+        return final_indexes
 
     def _calculate_index_benefits(self, candidates, query_results):
         indexes_benefit = []

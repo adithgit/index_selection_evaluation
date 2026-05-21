@@ -10,6 +10,7 @@ class DB2DatabaseConnector(DatabaseConnector):
         DatabaseConnector.__init__(self, db_name, autocommit=autocommit)
         self.db_system = "db2"
         self._connection = None
+        self.run_id = None  # shared SYSTOOLS.ADVISE_INSTANCE id for all virtual indexes
         
         # Default connection properties
         self.host = "localhost"
@@ -60,9 +61,24 @@ class DB2DatabaseConnector(DatabaseConnector):
         pass
 
     def create_statistics(self):
-        # We can implement RUNSTATS here later if needed, but for now we skip to allow the framework to proceed
-        logging.info("DB2: Skipping RUNSTATS for now")
-        pass
+        logging.info("DB2: Running RUNSTATS on all user tables via ADMIN_CMD")
+        try:
+            tables = self.exec_fetch(
+                f"SELECT TABNAME FROM SYSCAT.TABLES WHERE TABSCHEMA = '{self.user.upper()}'",
+                one=False
+            )
+            for (table_name,) in (tables or []):
+                logging.info(f"DB2: RUNSTATS on {table_name}")
+                cmd = (
+                    f"RUNSTATS ON TABLE {self.user.upper()}.{table_name} "
+                    f"WITH DISTRIBUTION AND DETAILED INDEXES ALL"
+                )
+                self.exec_only(f"CALL SYSPROC.ADMIN_CMD('{cmd}')")
+            self.commit()
+            logging.info("DB2: RUNSTATS complete")
+        except Exception as e:
+            logging.error(f"DB2: RUNSTATS failed: {e}")
+
 
     def exec_only(self, statement):
         self._cursor.execute(statement)
@@ -127,69 +143,151 @@ class DB2DatabaseConnector(DatabaseConnector):
         except Exception:
             return 0.0
 
+
+    def _ensure_advise_session(self):
+        if self.run_id is not None:
+            return
+        try:
+            self.exec_only(
+                "INSERT INTO SYSTOOLS.ADVISE_INSTANCE "
+                "(START_TIME, END_TIME, MODE, WKLD_COMPRESSION, STATUS) "
+                "VALUES (CURRENT TIMESTAMP, CURRENT TIMESTAMP, 'I', 'MED', 'STARTED')"
+            )
+            self.commit()
+            res = self.exec_fetch("SELECT MAX(START_TIME) FROM SYSTOOLS.ADVISE_INSTANCE")
+            self.run_id = res[0]
+        except Exception as e:
+            logging.error(f"DB2: failed to create ADVISE_INSTANCE: {e}")
+            self.run_id = "2000-01-01-00.00.00.000000"
+
     def _simulate_index(self, index):
         logging.info(f"Simulating index in DB2: {index.joined_column_names()}")
-        
+
         table_name = index.table().name.upper()
+        schema = self.user.upper()
         cols = index.columns
-        
-        # Create a unique name for the virtual index
-        index_name = f"V_{table_name}_{len(index.columns)}_{abs(hash(index.joined_column_names())) % 100000}"
-        
-        # In DB2, virtual indexes are defined by inserting into SYSTOOLS.ADVISE_INDEX
-        col_names = "+".join([c.name.upper() for c in cols]) + "+"
-        
+        col_count = len(cols)
+
+        index_name = f"V_{table_name}_{col_count}_{abs(hash(index.joined_column_names())) % 100000}"
+
+        # DB2 COLNAMES format: +COL1-COL2-... (hyphen-separated after the first column)
+        col_names = "+" + cols[0].name.upper()
+        for col in cols[1:]:
+            col_names += f"-{col.name.upper()}"
+
+        try:
+            col_stats = self.exec_fetch(
+                f"SELECT MIN(COLCARD) FROM SYSCAT.COLUMNS "
+                f"WHERE TABSCHEMA = '{schema}' AND TABNAME = '{table_name}' "
+                f"AND COLNAME IN ({', '.join(chr(39) + c.name.upper() + chr(39) for c in cols)})"
+            )
+            colcard = int(col_stats[0]) if col_stats and col_stats[0] is not None and col_stats[0] > 0 else 10000
+        except Exception as e:
+            logging.error(f"Error fetching column stats for {table_name}: {e}")
+            colcard = 10000
+
+        # Leaf page estimate aligned with db2advis (~40 rows per leaf for IMDB-scale data)
+        nleaf = max(1, colcard // 43)
+        nlevels = 3 if col_count <= 2 else 4
+
+        cols_sql = ", ".join([f'"{c.name.upper()}" ASC' for c in cols])
+        creation_text = (
+            f'CREATE INDEX "{schema}"."{index_name}" ON "{schema}"."{table_name}" '
+            f"({cols_sql}) ALLOW REVERSE SCANS"
+        )
+
+        self._ensure_advise_session()
+        run_id = self.run_id
+
+        iid = abs(hash(index_name)) % 32700
+
         stmt = f"""
-        INSERT INTO SYSTOOLS.ADVISE_INDEX 
-        (NAME, TBNAME, TBCREATOR, COLNAMES, USE_INDEX, EXISTS)
-        VALUES ('{index_name}', '{table_name}', '{self.user.upper()}', '{col_names}', 'Y', 'N')
+        INSERT INTO SYSTOOLS.ADVISE_INDEX
+        (NAME, CREATOR, TBNAME, TBCREATOR, COLNAMES, USE_INDEX, EXISTS, CREATION_TEXT, INDEXTYPE,
+         COLCOUNT, NLEAF, NLEVELS, FULLKEYCARD, FIRSTKEYCARD, CLUSTERRATIO, UNIQUERULE,
+         USERDEFINED, SYSTEM_REQUIRED, RUN_ID, IID)
+        VALUES ('{index_name}', '{schema}', '{table_name}', '{schema}', '{col_names}', 'Y', 'N',
+                '{creation_text}', 'REG',
+                {col_count}, {nleaf}, {nlevels}, {colcard}, {colcard}, 80, 'D', 1, 0, '{run_id}', {iid})
         """
+        
         try:
             self.exec_only(stmt)
+            self.commit()
         except Exception as e:
-            logging.error(f"Failed to simulate index {index_name}: {e}")
+            logging.error(f"Failed to simulate virtual index {index_name}: {e}")
         
-        # Return name as both OID and name
+        # Store estimated size (bytes) on the index object for budget tracking
+        index.estimated_size = nleaf * 8 * 1024
+        
         return (index_name, index_name)
 
     def _drop_simulated_index(self, identifier):
         stmt = f"DELETE FROM SYSTOOLS.ADVISE_INDEX WHERE NAME = '{identifier}'"
         try:
             self.exec_only(stmt)
+            self.commit()
         except Exception as e:
-            logging.error(f"Failed to drop simulated index {identifier}: {e}")
+            logging.error(f"Failed to drop simulated virtual index {identifier}: {e}")
 
     def _get_cost(self, query):
         plan = self._get_plan(query)
         return plan["Total Cost"]
 
     def _get_plan(self, query):
-        query_id = abs(hash(query.text)) % 2147483647
-        
         query_text = query.text.strip()
         if query_text.endswith(";"):
             query_text = query_text[:-1]
 
         try:
+            self.exec_only("DELETE FROM SYSTOOLS.EXPLAIN_STATEMENT")
+            self.exec_only(
+                "DELETE FROM SYSTOOLS.EXPLAIN_OBJECT "
+                "WHERE EXPLAIN_TIME IN (SELECT EXPLAIN_TIME FROM SYSTOOLS.EXPLAIN_STATEMENT)"
+            )
+        except Exception:
+            pass
+
+        try:
+            # On DB2 LUW, virtual indexes from ADVISE_INDEX are only considered when the
+            # statement is compiled in EVALUATE INDEXES mode via normal execution.
+            # EXPLAIN PLAN FOR does not pick them up.
             self.exec_only("SET CURRENT EXPLAIN MODE = EVALUATE INDEXES")
-            self.exec_only(f"EXPLAIN PLAN SET QUERYNO = {query_id} FOR {query_text}")
+            self.exec_only(query_text)
             self.exec_only("SET CURRENT EXPLAIN MODE = NO")
-            
-            cost_res = self.exec_fetch(f"SELECT TOTAL_COST FROM SYSTOOLS.EXPLAIN_STATEMENT WHERE QUERYNO = {query_id}")
-            cost = float(cost_res[0]) if cost_res else 0.0
-            plan_str = ""
-            
+            self.commit()
+
+            cost_res = self.exec_fetch(
+                "SELECT TOTAL_COST FROM SYSTOOLS.EXPLAIN_STATEMENT "
+                "ORDER BY EXPLAIN_TIME DESC FETCH FIRST 1 ROW ONLY"
+            )
+            cost = float(cost_res[0]) if cost_res and cost_res[0] is not None else 0.0
+
+            plan_objects = self.exec_fetch(
+                "SELECT DISTINCT O.OBJECT_NAME "
+                "FROM SYSTOOLS.EXPLAIN_OBJECT O "
+                "WHERE O.EXPLAIN_TIME = (SELECT MAX(EXPLAIN_TIME) FROM SYSTOOLS.EXPLAIN_STATEMENT) "
+                "AND O.EXPLAIN_LEVEL = 'P'",
+                one=False,
+            )
+            plan_str = " ".join([row[0] for row in plan_objects]) if plan_objects else ""
+
+            return {"Total Cost": cost, "Plan": plan_str}
         except Exception as e:
-            logging.error(f"Failed to get plan for query {query_id}: {e}")
-            cost = 0.0
-            plan_str = ""
+            try:
+                import ibm_db
+                db2_err = ibm_db.stmt_errormsg()
+                logging.error(
+                    f"Failed to get plan for query {query_id}: {e}. DB2 Error: {db2_err}"
+                )
+            except Exception:
+                logging.error(f"Failed to get plan for query {query_id}: {e}")
+            return {"Total Cost": 0.0, "Plan": ""}
         finally:
             try:
                 self.exec_only("SET CURRENT EXPLAIN MODE = NO")
-            except:
+            except Exception:
                 pass
-                
-        return {"Total Cost": cost, "Plan": plan_str}
 
     def estimate_index_size(self, index_oid):
         return 8192 * 1000

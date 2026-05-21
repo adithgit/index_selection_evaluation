@@ -127,6 +127,8 @@ class IndexSelection:
                 algorithm_config_unfolded["parameters"]["benchmark_name"] = config[
                     "benchmark_name"
                 ]
+
+                #MAIN FUNCTION CALLS 
                 indexes, what_if, cost_requests, cache_hits = self._run_algorithm(
                     algorithm_config_unfolded
                 )

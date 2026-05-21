@@ -75,6 +75,8 @@ class WorkloadParser:
                         query.columns.append(column)
 
     def execute(self):
+        #processes the queries that we want to execute 
+        
         file_path = os.path.dirname(os.path.abspath(__file__))
         query_files = glob.glob(
             f"{file_path}/../custom_workloads/{self.benchmark_name}/*.sql"
@@ -91,6 +93,7 @@ class WorkloadParser:
                 query_text = f.read()
                 query_id = file_name.split("/")[-1]
                 query = Query(query_id, query_text)
+                # add the colls that query contains by going thru the tables schema
                 self.store_indexable_columns(query, tables)
                 queries.append(query)
 
