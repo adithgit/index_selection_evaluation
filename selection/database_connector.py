@@ -39,7 +39,12 @@ class DatabaseConnector:
 
     def drop_index(self, index):
         statement = f"drop index {index.index_idx()}"
-        self.exec_only(statement)
+        try:
+            self.exec_only(statement)
+            self.commit()
+        except Exception as e:
+            logging.debug(f"Failed to drop index {index.index_idx()}: {e}")
+            self.rollback()
 
     def _prepare_query(self, query):
         for query_statement in query.text.split(";"):

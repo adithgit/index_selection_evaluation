@@ -57,7 +57,7 @@ class DB2AdvisAlgorithm(SelectionAlgorithm):
         utilized_indexes, query_details = get_utilized_indexes(
             workload, candidates, self.cost_evaluation, True
         )
-        logging.info(f"Utilized indexes: {len(utilized_indexes)}")
+        logging.info(f"Utilized indexes: {utilized_indexes}")
 
         index_benefits = self._calculate_index_benefits(utilized_indexes, query_details)
         logging.info(f"Index benefits calculated: {len(index_benefits)}")
