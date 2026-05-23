@@ -141,12 +141,17 @@ class PostgresDatabaseConnector(DatabaseConnector):
             f"create index {index.index_idx()} "
             f"on {table_name} ({index.joined_column_names()})"
         )
-        self.exec_only(statement)
-        size = self.exec_fetch(
-            f"select relpages from pg_class c " f"where c.relname = '{index.index_idx()}'"
-        )
-        size = size[0]
-        index.estimated_size = size * 8 * 1024
+        try:
+            self.exec_only(statement)
+            size = self.exec_fetch(
+                f"select relpages from pg_class c " f"where c.relname = '{index.index_idx()}'"
+            )
+            size = size[0]
+            index.estimated_size = size * 8 * 1024
+        except psycopg2.Error as e:
+            logging.warning(f"Failed to create index {index.index_idx()}, ignoring. Error: {e}")
+            self._connection.rollback()
+            index.estimated_size = 0
 
     def drop_indexes(self):
         logging.info("Dropping indexes")
