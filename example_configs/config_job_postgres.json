@@ -1,5 +1,5 @@
 {
-    "database_system": "db2",
+    "database_system": "postgres",
     "database_name": "imdb",
     "benchmark_name": "JOB",
     "scale_factor": 1,
