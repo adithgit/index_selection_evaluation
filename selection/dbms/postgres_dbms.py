@@ -1,5 +1,6 @@
 import logging
 import re
+import time
 
 import psycopg2
 
@@ -28,7 +29,7 @@ class PostgresDatabaseConnector(DatabaseConnector):
         self._cursor = self._connection.cursor()
 
     def enable_simulation(self):
-        self.exec_only("create extension hypopg")
+        self.exec_only("create extension if not exists hypopg")
         self.commit()
 
     def database_names(self):
@@ -109,6 +110,18 @@ class PostgresDatabaseConnector(DatabaseConnector):
         return False
 
     def _simulate_index(self, index):
+        # Manually enforce B-Tree physical limits by checking column types
+        for column in index.columns:
+            query = f"SELECT data_type FROM information_schema.columns WHERE table_name = '{column.table.name}' AND column_name = '{column.name}'"
+            result = self.exec_fetch(query, one=True)
+            if result:
+                data_type = result[0]
+                if data_type in ['text', 'character varying']:
+                    # Return dummy unique OID and name, preventing HypoPG simulation
+                    # Use a negative hash to ensure uniqueness and avoid KeyErrors during drop
+                    dummy_oid = -abs(hash(index.index_idx()) % 1000000000) - 1
+                    return (dummy_oid, "invalid_index_dummy")
+
         table_name = index.table()
         statement = (
             "select * from hypopg_create_index( "
@@ -119,20 +132,29 @@ class PostgresDatabaseConnector(DatabaseConnector):
         return result
 
     def _drop_simulated_index(self, oid):
+        if oid <= 0:
+            return
         statement = f"select * from hypopg_drop_index({oid})"
         result = self.exec_fetch(statement)
 
         assert result[0] is True, f"Could not drop simulated index with oid = {oid}."
 
     def estimate_index_size(self, index_oid):
+        if index_oid <= 0:
+            return 999999999999  # Make it infinitely large so the budget rejects it
         statement = f"select hypopg_relation_size({index_oid})"
         result = self.exec_fetch(statement)[0]
         assert result > 0, "Hypothetical index does not exist."
         return result
 
     def all_simulated_indexes(self):
-        statement = "select * from hypopg_list_indexes()"
-        indexes = self.exec_fetch(statement, one=False)
+        # HypoPG 1.4.x uses hypopg() instead of hypopg_list_indexes()
+        try:
+            statement = "select indexrelid, indexname from hypopg()"
+            indexes = self.exec_fetch(statement, one=False)
+        except Exception:
+            statement = "select * from hypopg_list_indexes()"
+            indexes = self.exec_fetch(statement, one=False)
         return indexes
 
     def create_index(self, index):
@@ -148,6 +170,7 @@ class PostgresDatabaseConnector(DatabaseConnector):
             )
             size = size[0]
             index.estimated_size = size * 8 * 1024
+            self.commit()
         except psycopg2.Error as e:
             logging.warning(f"Failed to create index {index.index_idx()}, ignoring. Error: {e}")
             self._connection.rollback()
@@ -173,9 +196,11 @@ class PostgresDatabaseConnector(DatabaseConnector):
             set_timeout = f"set statement_timeout={timeout}"
             self.exec_only(set_timeout)
         statement = f"explain (analyze, buffers, format json) {query_text}"
+        start_time = time.time()
         try:
             plan = self.exec_fetch(statement, one=True)[0][0]["Plan"]
-            result = plan["Actual Total Time"], plan
+            exec_time_ms = (time.time() - start_time) * 1000
+            result = exec_time_ms, plan
         except Exception as e:
             logging.error(f"{query.nr}, {e}")
             self._connection.rollback()
