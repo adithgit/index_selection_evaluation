@@ -23,45 +23,77 @@ class WorkloadParser:
         if self.database_system == "postgres":
             from selection.dbms.postgres_dbms import PostgresDatabaseConnector
             db_connector = PostgresDatabaseConnector(self.database_name)
-            result = db_connector.exec_fetchall(
-                "SELECT tablename FROM pg_catalog.pg_tables WHERE schemaname='public';"
-            )
-            table_names = [row[0] for row in result]
-
-            tables = {}
-            for table_name in table_names:
-                table = Table(table_name)
-                result = db_connector.exec_fetch(
-                    "SELECT column_name "
-                    + "FROM information_schema.columns "
-                    + "WHERE table_schema = 'public' "
-                    + f"AND table_name = '{table_name}';", False
+            try:
+                result = db_connector.exec_fetchall(
+                    "SELECT tablename FROM pg_catalog.pg_tables WHERE schemaname='public';"
                 )
-                column_names = [row[0] for row in result]
-                for column_name in column_names:
-                    table.add_column(Column(column_name))
-                tables[table_name] = table
+                table_names = [row[0] for row in result]
+
+                tables = {}
+                for table_name in table_names:
+                    table = Table(table_name)
+                    result = db_connector.exec_fetch(
+                        "SELECT column_name "
+                        + "FROM information_schema.columns "
+                        + "WHERE table_schema = 'public' "
+                        + f"AND table_name = '{table_name}';", False
+                    )
+                    column_names = [row[0] for row in result]
+                    for column_name in column_names:
+                        table.add_column(Column(column_name))
+                    tables[table_name] = table
+            finally:
+                db_connector.close()
             return tables
         elif self.database_system == "db2":
             from selection.dbms.db2_dbms import DB2DatabaseConnector
             db_connector = DB2DatabaseConnector(self.database_name)
             db_connector.create_connection()
-            schema = db_connector.user.upper()
-            result = db_connector.exec_fetch(
-                f"SELECT TABNAME FROM SYSCAT.TABLES WHERE TABSCHEMA='{schema}' AND TYPE='T'", False
-            )
-            table_names = [row[0].lower() for row in result]
-
-            tables = {}
-            for table_name in table_names:
-                table = Table(table_name)
+            try:
+                schema = db_connector.user.upper()
                 result = db_connector.exec_fetch(
-                    f"SELECT COLNAME FROM SYSCAT.COLUMNS WHERE TABSCHEMA='{schema}' AND TABNAME='{table_name.upper()}'", False
+                    f"SELECT TABNAME FROM SYSCAT.TABLES WHERE TABSCHEMA='{schema}' AND TYPE='T'", False
                 )
-                column_names = [row[0].lower() for row in result]
-                for column_name in column_names:
-                    table.add_column(Column(column_name))
-                tables[table_name] = table
+                table_names = [row[0].lower() for row in result]
+
+                tables = {}
+                for table_name in table_names:
+                    table = Table(table_name)
+                    result = db_connector.exec_fetch(
+                        f"SELECT COLNAME FROM SYSCAT.COLUMNS WHERE TABSCHEMA='{schema}' AND TABNAME='{table_name.upper()}'", False
+                    )
+                    column_names = [row[0].lower() for row in result]
+                    for column_name in column_names:
+                        table.add_column(Column(column_name))
+                    tables[table_name] = table
+            finally:
+                db_connector.close()
+            return tables
+        elif self.database_system == "mysql":
+            from selection.dbms.mysql_dbms import MySQLDatabaseConnector
+            db_connector = MySQLDatabaseConnector(self.database_name)
+            try:
+                result = db_connector.exec_fetchall(
+                    f"SELECT TABLE_NAME FROM information_schema.TABLES "
+                    f"WHERE TABLE_SCHEMA='{self.database_name}' AND TABLE_TYPE='BASE TABLE'"
+                )
+                table_names = [row[0].lower() for row in result]
+
+                tables = {}
+                for table_name in table_names:
+                    table = Table(table_name)
+                    result = db_connector.exec_fetchall(
+                        f"SELECT COLUMN_NAME FROM information_schema.COLUMNS "
+                        f"WHERE TABLE_SCHEMA='{self.database_name}' "
+                        f"AND TABLE_NAME='{table_name}' "
+                        f"ORDER BY ORDINAL_POSITION"
+                    )
+                    column_names = [row[0].lower() for row in result]
+                    for column_name in column_names:
+                        table.add_column(Column(column_name))
+                    tables[table_name] = table
+            finally:
+                db_connector.close()
             return tables
         else:
             raise NotImplementedError(f"get_tables for {self.database_system}")

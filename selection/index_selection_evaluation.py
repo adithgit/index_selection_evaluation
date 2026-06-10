@@ -17,6 +17,7 @@ from selection.benchmark import Benchmark
 from selection.dbms.hana_dbms import HanaDatabaseConnector
 from selection.dbms.postgres_dbms import PostgresDatabaseConnector
 from selection.dbms.db2_dbms import DB2DatabaseConnector
+from selection.dbms.mysql_dbms import MySQLDatabaseConnector
 from selection.query_generator import QueryGenerator
 from selection.selection_algorithm import AllIndexesAlgorithm, NoIndexAlgorithm
 from selection.table_generator import TableGenerator
@@ -37,9 +38,10 @@ ALGORITHMS = {
 }
 
 DBMSYSTEMS = {
-    "postgres": PostgresDatabaseConnector, 
+    "postgres": PostgresDatabaseConnector,
     "hana": HanaDatabaseConnector,
-    "db2": DB2DatabaseConnector
+    "db2": DB2DatabaseConnector,
+    "mysql": MySQLDatabaseConnector,
 }
 
 
@@ -102,7 +104,8 @@ class IndexSelection:
                 f"benchmark_results/workload_{config['benchmark_name']}"
                 f"_{len(self.workload.queries)}_queries.pickle"
             )
-            pickle.dump(self.workload, open(pickle_filename, "wb"))
+            with open(pickle_filename, "wb") as pf:
+                pickle.dump(self.workload, pf)
 
     def _run_algorithms(self, config_file):
         with open(config_file) as f:
