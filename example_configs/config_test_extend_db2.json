@@ -1,0 +1,17 @@
+{
+    "database_system": "db2",
+    "database_name": "imdb",
+    "benchmark_name": "JOB",
+    "scale_factor": 1,
+    "algorithms": [
+        {
+            "name": "extend",
+            "parameters": {
+                "max_index_width": 2,
+                "budget_MB": [500]
+            },
+            "timeout": 60,
+            "number_of_actual_runs": 0
+        }
+    ]
+}
