@@ -54,14 +54,14 @@ select{height:34px;border:1px solid #cfceca;border-radius:8px;padding:0 8px;font
 </div>
 <div style="display:flex;flex-wrap:wrap;align-items:center;gap:18px;margin-bottom:16px;">
   <div style="display:flex;gap:6px;align-items:center;"><span style="font-size:12px;color:#5f5e5a;">Workload</span>
-    <button class="ctl-btn on" id="w-job">JOB</button><button class="ctl-btn" id="w-tpch">TPC-H</button></div>
+    <button class="ctl-btn" id="w-job">JOB</button><button class="ctl-btn on" id="w-tpch">TPC-H</button></div>
   <div style="display:flex;gap:6px;align-items:center;"><span style="font-size:12px;color:#5f5e5a;">Algorithm</span>
     <button class="ctl-btn" id="a-extend">Extend</button><button class="ctl-btn" id="a-db2advis">db2advis</button><button class="ctl-btn on" id="a-relaxation">Relaxation</button></div>
   <div style="display:flex;gap:6px;align-items:center;"><span style="font-size:12px;color:#5f5e5a;">Budget</span><select id="bud"></select></div>
   <div style="display:flex;gap:14px;align-items:center;">
     <label class="chk"><input type="checkbox" id="e-postgres" checked><span style="width:11px;height:11px;border-radius:50%;background:#2D7FD3;display:inline-block;"></span>Postgres</label>
-    <label class="chk"><input type="checkbox" id="e-db2"><span style="width:10px;height:10px;background:#1D9E75;display:inline-block;"></span>DB2</label>
-    <label class="chk"><input type="checkbox" id="e-mysql"><span style="width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent;border-bottom:11px solid #E0852A;display:inline-block;"></span>MySQL</label></div>
+    <label class="chk"><input type="checkbox" id="e-db2" disabled><span style="width:10px;height:10px;background:#1D9E75;display:inline-block;"></span>DB2</label>
+    <label class="chk"><input type="checkbox" id="e-mysql" disabled><span style="width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent;border-bottom:11px solid #E0852A;display:inline-block;"></span>MySQL</label></div>
   <label class="chk" style="margin-left:2px;"><input type="checkbox" id="slower-only"> only ran slower (actual &lt; 1&times;)</label>
   <div style="display:flex;gap:6px;align-items:center;margin-left:auto;"><span style="font-size:12px;color:#5f5e5a;">View</span>
     <button class="ctl-btn on" id="v-speedup">Cost vs Runtime</button><button class="ctl-btn" id="v-cost">Predicted vs Actual Cost</button><button class="ctl-btn" id="v-fig4">Per-Query Cost</button></div>
@@ -104,7 +104,7 @@ const STATS_TPCH={"postgres|extend|250": {"sp": -0.152, "danger": 3, "n_pred": 1
 const BUDGETS_TPCH=[250, 500, 1000, 1500, 2000, 2500, 3000, 3500, 4250, 5000, 5750, 6500, 8000, 10000];
 const ENG={postgres:{label:'Postgres',ps:'circle',fill:'rgba(45,127,211,0.74)',bd:'#185FA5',txt:'#185FA5'},db2:{label:'DB2',ps:'rect',fill:'rgba(29,158,117,0.74)',bd:'#0F6E56',txt:'#0F6E56'},mysql:{label:'MySQL',ps:'triangle',fill:'rgba(224,133,42,0.80)',bd:'#8A560F',txt:'#8A560F'}};
 const ORDER=['postgres','db2','mysql'];
-const state={algo:'relaxation',budget:'15000',workload:'job',view:'speedup',eng:{postgres:true,db2:false,mysql:false},slowerOnly:false};
+const state={algo:'relaxation',budget:'5000',workload:'tpch',view:'speedup',eng:{postgres:true,db2:false,mysql:false},slowerOnly:false};
 let chart=null; let chart2=null; let chart4=null; let chart4e=null; const CAP=1e8;
 const fmt=v=>v>=1e7?v.toExponential(1):v>=1e6?(v/1e6).toFixed(1)+'M':v>=1e3?(v/1e3).toFixed(0)+'k':v>=10?Math.round(v):v>=1?v.toFixed(1):v.toFixed(2);
 function curData(){return state.workload==='tpch'?DATA_TPCH:DATA;}
