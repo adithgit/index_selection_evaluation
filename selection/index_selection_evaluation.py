@@ -2,6 +2,7 @@ import copy
 import json
 import logging
 import pickle
+import subprocess
 import sys
 import time
 
@@ -131,7 +132,7 @@ class IndexSelection:
                     "benchmark_name"
                 ]
 
-                #MAIN FUNCTION CALLS 
+                #MAIN FUNCTION CALLS
                 indexes, what_if, cost_requests, cache_hits = self._run_algorithm(
                     algorithm_config_unfolded
                 )
@@ -149,6 +150,47 @@ class IndexSelection:
                     what_if,
                 )
                 benchmark.benchmark()
+
+                if self.database_system == "mysql":
+                    self._restart_videx_container()
+
+    def _restart_videx_container(self, container="videx"):
+        """Restart the Docker container to flush accumulated file descriptors."""
+        logging.info(f"Restarting {container} container to flush file descriptors...")
+        if self.db_connector:
+            try:
+                self.db_connector.close()
+            except Exception:
+                pass
+
+        subprocess.run(["docker", "stop", container], check=False, capture_output=True)
+        subprocess.run(["docker", "start", container], check=False, capture_output=True)
+        logging.info(f"Container {container} restarted, waiting for MySQL...")
+
+        # Wait for MySQL to accept connections
+        import mysql.connector
+        for attempt in range(60):
+            try:
+                conn = mysql.connector.connect(
+                    host="127.0.0.1", port=13308,
+                    user="videx", password="password",
+                    connection_timeout=5,
+                )
+                conn.close()
+                logging.info("MySQL is ready after container restart.")
+                break
+            except Exception:
+                time.sleep(5)
+        else:
+            logging.error("MySQL did not become ready after container restart.")
+
+        # Re-establish db_connector and clean up any leftover VIDEX simulated indexes
+        self.setup_db_connector(self.database_name, self.database_system)
+        try:
+            self.db_connector.what_if.drop_all_simulated_indexes()
+            logging.info("VIDEX shadow indexes cleaned up after restart.")
+        except Exception as e:
+            logging.warning(f"Could not clean VIDEX shadow indexes after restart: {e}")
 
     # Parameter list example: {"max_indexes": [5, 10, 20]}
     # Creates config for each value

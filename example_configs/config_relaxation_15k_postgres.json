@@ -1,16 +1,14 @@
 {
-    "database_system": "mysql",
-    "database_name": "JOB_REFINED",
+    "database_system": "postgres",
+    "database_name": "imdb",
     "benchmark_name": "JOB_REFINED",
     "scale_factor": 1,
     "algorithms": [
         {
-            "name": "extend",
+            "name": "relaxation",
             "parameters": {
                 "max_index_width": 2,
-                "budget_MB": 15000,
-                "min_cost_improvement": 1.003,
-                "selection_timeout_seconds": 25200
+                "budget_MB": 15000
             },
             "timeout": 300,
             "number_of_actual_runs": 1

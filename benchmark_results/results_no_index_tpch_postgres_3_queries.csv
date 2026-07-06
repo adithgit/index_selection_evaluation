@@ -1,0 +1,2 @@
+date;commit;algorithm name;parameters;scale factor;benchmark name;db system;algorithm runtime;algorithm cost time;algorithm index creation time;algorithm created #indexes;#indexes;index create time;memory consumption;cost requests;cache hits;q2;q17;q20;indexed columns
+2026-07-01 12:10:39;53e9803;no_index;{"benchmark_name": "tpch"};10;tpch;postgres;0.01;0;0;0;0;0;0;0;0;{"Runtimes": [], "Hits": [], "Cost": 4314968382.53};{"Runtimes": [], "Hits": [], "Cost": 112903435779.82};{"Runtimes": [], "Hits": [], "Cost": 18594810321369.27};[]

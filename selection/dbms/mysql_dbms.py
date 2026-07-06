@@ -1,6 +1,7 @@
 import json
 import logging
 import re
+import subprocess
 import time
 
 import mysql.connector
@@ -11,10 +12,18 @@ VIDEX_HOST = "127.0.0.1"
 VIDEX_PORT = 13308
 VIDEX_USER = "videx"
 VIDEX_PASSWORD = "password"
+# Stats server address AS SEEN FROM INSIDE the container (mysqld's curl).
+# The in-container stats server segfaults under qemu and crash-loops; every
+# failed lookup leaks a socket fd in mysqld until it dies with EMFILE.
+# host.docker.internal points at the stable native Flask server on the Mac.
+VIDEX_STATS_HOST = "host.docker.internal"
 VIDEX_STATS_PORT = 5001
+VIDEX_CONTAINER = "videx"
 
 _RECONNECT_WAIT_SECS = 5
 _RECONNECT_MAX_ATTEMPTS = 10
+_CONTAINER_RESTART_AT_ATTEMPT = 3   # trigger restart if still down after this many attempts
+_CONTAINER_RESTART_MIN_INTERVAL = 90  # seconds between container restarts
 
 
 class MySQLDatabaseConnector(DatabaseConnector):
@@ -55,6 +64,8 @@ class MySQLDatabaseConnector(DatabaseConnector):
         self._connection = None
         self._videx_connection = None
         self._server_crashed = False
+        self._crashed_at = 0.0
+        self._last_container_restart = 0.0
 
         if not self.db_name:
             self.db_name = "JOB_REFINED"
@@ -84,7 +95,7 @@ class MySQLDatabaseConnector(DatabaseConnector):
         # CRITICAL: tell VIDEX plugin where the statistics server is.
         # Without this, EXPLAIN costs are based on zero-row defaults.
         self._videx_cursor.execute(
-            f"SET @VIDEX_SERVER='{VIDEX_HOST}:{VIDEX_STATS_PORT}'"
+            f"SET @VIDEX_SERVER='{VIDEX_STATS_HOST}:{VIDEX_STATS_PORT}'"
         )
 
     def create_connection(self):
@@ -126,24 +137,73 @@ class MySQLDatabaseConnector(DatabaseConnector):
         self._connection = None
         self._videx_connection = None
 
+    def _trigger_container_restart(self):
+        """
+        Restart the videx Docker container to flush accumulated file descriptors.
+
+        Throttled by _CONTAINER_RESTART_MIN_INTERVAL so rapid failure loops don't
+        spin-restart. Waits up to 60s for MySQL to accept connections after restart.
+        Returns True if MySQL is reachable afterwards.
+        """
+        now = time.time()
+        if now - self._last_container_restart < _CONTAINER_RESTART_MIN_INTERVAL:
+            logging.info("Container restart skipped (restarted too recently).")
+            return False
+        self._last_container_restart = now
+        self._close_connections_quietly()
+
+        logging.info(f"MySQL connector: restarting '{VIDEX_CONTAINER}' container...")
+        try:
+            subprocess.run(
+                ["docker", "restart", VIDEX_CONTAINER],
+                check=False, capture_output=True, timeout=120,
+            )
+        except Exception as e:
+            logging.warning(f"docker restart failed: {e}")
+            return False
+
+        logging.info("Container restart issued; waiting up to 60s for MySQL...")
+        for _ in range(12):
+            time.sleep(5)
+            try:
+                conn = mysql.connector.connect(
+                    host=VIDEX_HOST, port=VIDEX_PORT,
+                    user=VIDEX_USER, password=VIDEX_PASSWORD,
+                    connection_timeout=5,
+                )
+                conn.close()
+                logging.info("MySQL is ready after container restart.")
+                return True
+            except Exception:
+                pass
+        logging.warning("MySQL not ready within 60s after container restart.")
+        return False
+
     def _reconnect(self):
         """
         Reconnect with linear backoff up to _RECONNECT_MAX_ATTEMPTS.
 
-        After a SIGSEGV MySQL needs several seconds to restart. On total failure
-        self._server_crashed is set True so all callers return safe fallbacks
-        instead of propagating exceptions through the benchmark.
+        At attempt _CONTAINER_RESTART_AT_ATTEMPT, if MySQL is still unreachable,
+        the container is restarted automatically so the benchmark survives without
+        a running external watchdog.
         """
         logging.warning("MySQL: connection lost — attempting reconnect...")
         self._close_connections_quietly()
 
         for attempt in range(1, _RECONNECT_MAX_ATTEMPTS + 1):
-            wait = _RECONNECT_WAIT_SECS * attempt
-            logging.info(
-                f"MySQL: reconnect attempt {attempt}/{_RECONNECT_MAX_ATTEMPTS} "
-                f"(waiting {wait}s)..."
-            )
-            time.sleep(wait)
+            if attempt == _CONTAINER_RESTART_AT_ATTEMPT:
+                logging.info(
+                    "MySQL: still down after several attempts — restarting container..."
+                )
+                self._trigger_container_restart()
+                # _trigger_container_restart already waited for MySQL; skip extra sleep
+            else:
+                wait = _RECONNECT_WAIT_SECS * attempt
+                logging.info(
+                    f"MySQL: reconnect attempt {attempt}/{_RECONNECT_MAX_ATTEMPTS} "
+                    f"(waiting {wait}s)..."
+                )
+                time.sleep(wait)
             try:
                 self.create_connection()
                 logging.info("MySQL: reconnected successfully.")
@@ -151,11 +211,23 @@ class MySQLDatabaseConnector(DatabaseConnector):
             except Exception as e:
                 logging.warning(f"MySQL: reconnect attempt {attempt} failed: {e}")
 
+        # Last resort: force a container restart bypassing the throttle
+        logging.warning("MySQL: all attempts failed — forcing container restart as last resort...")
+        self._last_container_restart = 0.0  # bypass throttle
+        if self._trigger_container_restart():
+            try:
+                self.create_connection()
+                logging.info("MySQL: recovered via last-resort force restart.")
+                return
+            except Exception as e:
+                logging.warning(f"MySQL: last-resort recovery failed: {e}")
+
         logging.error(
             f"MySQL: could not reconnect after {_RECONNECT_MAX_ATTEMPTS} attempts. "
             "Marking server as crashed; remaining queries will return cost=0."
         )
         self._server_crashed = True
+        self._crashed_at = time.time()
 
     def close(self):
         """Override DatabaseConnector.close() to handle dual connections."""
@@ -187,7 +259,13 @@ class MySQLDatabaseConnector(DatabaseConnector):
         Returns True on success, False if server is permanently down.
         """
         if self._server_crashed:
-            return False
+            # Attempt recovery after 120 seconds
+            if time.time() - self._crashed_at > 120:
+                logging.info("MySQL: attempting recovery from crashed state...")
+                self._server_crashed = False
+                self._reconnect()
+            if self._server_crashed:
+                return False
 
         def _try():
             self._videx_cursor.execute(stmt)
@@ -211,11 +289,30 @@ class MySQLDatabaseConnector(DatabaseConnector):
                     logging.error(
                         f"VIDEX retry failed on {query_label!r}: {retry_err}"
                     )
-                    self._server_crashed = True
+                    # Don't set _server_crashed here — one retry failure after reconnect
+                    # doesn't mean the server is permanently down. Return False for this
+                    # eval only; the next call will reconnect again if needed.
                     return False
             else:
                 raise
         except Exception as e:
+            err_str = str(e)
+            if "Too many open files" in err_str or "OS errno 24" in err_str:
+                logging.warning(
+                    f"VIDEX: fd exhaustion detected on {query_label!r}; "
+                    "restarting container and reconnecting..."
+                )
+                self._trigger_container_restart()
+                self._reconnect()
+                if not self._server_crashed:
+                    try:
+                        self._videx_cursor.execute(stmt)
+                        return True
+                    except Exception as retry_e:
+                        logging.error(
+                            f"VIDEX retry after fd-restart failed on {query_label!r}: {retry_e}"
+                        )
+                return False
             logging.error(f"VIDEX execute error on {query_label!r}: {e}")
             return False
 

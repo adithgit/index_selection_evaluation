@@ -1,0 +1,42 @@
+{
+    "database_system": "postgres",
+    "benchmark_name": "tpch",
+    "scale_factor": 10,
+    "queries": [2, 17, 20],
+    "algorithms": [
+        {
+            "name": "no_index",
+            "parameters": {},
+            "timeout": 300,
+            "number_of_actual_runs": 0
+        },
+        {
+            "name": "extend",
+            "parameters": {
+                "max_index_width": 2,
+                "budget_MB": 5000
+            },
+            "timeout": 300,
+            "number_of_actual_runs": 0
+        },
+        {
+            "name": "relaxation",
+            "parameters": {
+                "max_index_width": 2,
+                "budget_MB": 5000
+            },
+            "timeout": 300,
+            "number_of_actual_runs": 0
+        },
+        {
+            "name": "db2advis",
+            "parameters": {
+                "max_index_width": 2,
+                "budget_MB": 5000,
+                "try_variations_seconds": 0
+            },
+            "timeout": 300,
+            "number_of_actual_runs": 0
+        }
+    ]
+}

@@ -62,6 +62,10 @@ class Benchmark:
         # to avoid creating the indexes.
         if self.number_of_runs > 0:
             self._create_indexes()
+            # InnoDB does not compute index statistics at CREATE INDEX time;
+            # without ANALYZE TABLE the optimizer uses defaults and picks plans
+            # far worse than full table scans, causing 8-33x runtime regressions.
+            self.db_connector.create_statistics()
         else:
             self.index_create_time = 0
             for index in self.indexes:
@@ -172,9 +176,9 @@ class Benchmark:
             logging.debug(f"Random seed: {seed}")
             random.seed(seed)
             random.shuffle(random_query_indexes)
-            for query_index in random_query_indexes:
+            for pos, query_index in enumerate(random_query_indexes):
                 query = self.workload.queries[query_index]
-                logging.debug("Run {}".format(query))
+                logging.info(f"Running query {pos + 1}/{len(random_query_indexes)}: {query.nr}")
                 execution_time, plan = self._benchmark_query(query)
                 results[query_index]["Runtimes"].append(execution_time)
                 results[query_index]["Hits"].append(self._calculate_hits(plan))

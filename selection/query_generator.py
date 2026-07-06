@@ -60,6 +60,9 @@ class QueryGenerator:
                 if self.query_ids and query_id not in self.query_ids:
                     continue
                 text = text.replace("\t", "")
+                # qgen emits "interval 'N' day (3)" which PostgreSQL rejects;
+                # rewrite to "interval 'N days'"
+                text = re.sub(r"interval '(\d+)' day \(\d+\)", r"interval '\1 days'", text)
                 self.add_new_query(query_id, text)
         logging.info("Queries generated")
 
