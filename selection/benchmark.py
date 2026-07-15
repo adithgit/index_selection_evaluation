@@ -225,5 +225,8 @@ class Benchmark:
             f"{self.config['name']}_{self.benchmark_name}_{self.db_system}"
             f"_{len(self.workload.queries)}"
         )
-        self.filename = f"benchmark_results/results_{identifier}_queries.csv"
-        self.picklename = f"benchmark_results/indexes_{identifier}_queries.pickle"
+        # Optional suffix (e.g. "_calibrated") to keep variant runs from
+        # overwriting the baseline result files. Unset -> unchanged filenames.
+        suffix = os.environ.get("BENCHMARK_RESULT_SUFFIX", "")
+        self.filename = f"benchmark_results/results_{identifier}_queries{suffix}.csv"
+        self.picklename = f"benchmark_results/indexes_{identifier}_queries{suffix}.pickle"

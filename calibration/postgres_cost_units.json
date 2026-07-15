@@ -1,0 +1,20 @@
+{
+  "_comment": "PostgreSQL optimizer cost units calibrated with the Wu et al. (ICDE 2013) profiling method. CPU units measured warm (in shared_buffers, no I/O); I/O units measured COLD (real disk reads after `brew services restart` + `sudo purge`). Regenerate with calibration/calibrate_1_cpu_warm.py then calibrate_2_io_cold.py. Applied via env var PG_COST_GUCS=calibrated (see calibration/README.md).",
+  "protocol": "cpu-warm / io-cold (Wu et al. ICDE 2013)",
+  "calibrated_on": "2026-07-15",
+  "system": "PostgreSQL 15 (Homebrew), 16 GB RAM, SSD",
+  "gucs": {
+    "seq_page_cost": 1.0,
+    "random_page_cost": 80.20893,
+    "cpu_tuple_cost": 0.03532,
+    "cpu_index_tuple_cost": 0.01604,
+    "cpu_operator_cost": 0.00199
+  },
+  "absolute_ms_per_op": {
+    "seq_page_cost": 0.0011704120232418802,
+    "random_page_cost": 0.09387749745672873,
+    "cpu_tuple_cost": 4.134360902255638e-05,
+    "cpu_index_tuple_cost": 1.876816053822755e-05,
+    "cpu_operator_cost": 2.328879699248122e-06
+  }
+}

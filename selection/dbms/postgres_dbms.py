@@ -1,4 +1,6 @@
+import json
 import logging
+import os
 import re
 import time
 
@@ -24,9 +26,37 @@ class PostgresDatabaseConnector(DatabaseConnector):
     def create_connection(self):
         if self._connection:
             self.close()
-        self._connection = psycopg2.connect("dbname={}".format(self.db_name))
+        options = self._cost_guc_options()
+        if options:
+            self._connection = psycopg2.connect(dbname=self.db_name, options=options)
+        else:
+            self._connection = psycopg2.connect("dbname={}".format(self.db_name))
         self._connection.autocommit = self.autocommit
         self._cursor = self._connection.cursor()
+
+    @staticmethod
+    def _cost_guc_options():
+        # Cost-model toggle, applied as libpq startup options so the units persist
+        # for the whole session (every what-if EXPLAIN and every timed query),
+        # immune to rollback in the cost-estimation loop. See calibration/README.md.
+        #   (unset)                 -> stock PostgreSQL defaults
+        #   PG_COST_GUCS=calibrated -> load calibration/postgres_cost_units.json
+        #   PG_COST_GUCS="random_page_cost=80;cpu_tuple_cost=0.035"  -> explicit GUCs
+        gucs = os.environ.get("PG_COST_GUCS", "").strip()
+        if not gucs:
+            return None
+        if gucs.lower() == "calibrated":
+            path = os.path.join(
+                os.path.dirname(__file__), "..", "..", "calibration",
+                "postgres_cost_units.json"
+            )
+            with open(path) as f:
+                units = json.load(f)["gucs"]
+            parts = ["{}={}".format(k, v) for k, v in units.items()]
+        else:
+            parts = [p.strip().replace(" ", "") for p in gucs.split(";") if p.strip()]
+        logging.info("Postgres cost calibration active: %s", "; ".join(parts))
+        return " ".join("-c {}".format(p) for p in parts)
 
     def enable_simulation(self):
         self.exec_only("create extension if not exists hypopg")
