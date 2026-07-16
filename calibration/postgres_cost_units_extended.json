@@ -1,0 +1,46 @@
+{
+  "parallel_setup_cost": {
+    "ms": 1.64,
+    "units": 1397,
+    "pg_default": 1000,
+    "verdict": "default is roughly right (1.4x low)"
+  },
+  "parallel_tuple_cost": {
+    "ms": 8e-06,
+    "units": 0.0069,
+    "pg_default": 0.1,
+    "verdict": "default overprices worker->leader transfer ~14x"
+  },
+  "procost": {
+    "texteq": {
+      "ns_per_row": 4.1,
+      "procost_measured": 1.8,
+      "procost_catalog": 1
+    },
+    "textlike": {
+      "ns_per_row": 30.2,
+      "procost_measured": 13.0,
+      "procost_catalog": 1
+    },
+    "textregexeq": {
+      "ns_per_row": 185.9,
+      "procost_measured": 79.8,
+      "procost_catalog": 1
+    }
+  },
+  "procost_note": "denominated in measured cpu_operator_cost (2.33 ns); 64-char strings",
+  "jit": {
+    "available": false,
+    "note": "pg_jit_available()=false on this Homebrew build; thresholds moot"
+  },
+  "effective_io_concurrency": {
+    "platform_locked": 0,
+    "note": "macOS lacks posix_fadvise; prefetch hints impossible, knob uncalibratable",
+    "cold_bitmap_scan_ms_at_0": 3142
+  },
+  "effective_cache_size": {
+    "recommended_gb": 12,
+    "pg_default_gb": 4,
+    "note": "capacity knowable (~75% of 16GB RAM); cache STATE is not a constant"
+  }
+}

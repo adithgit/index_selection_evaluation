@@ -50,3 +50,26 @@ sees random ≈ sequential, so no single `random_page_cost` is right for both. O
 this calibration is roughly runtime-neutral and nudges the cost↔runtime rank
 correlation 0.18 → 0.27 — calibration fixes cost *units*, not *cardinality*, which
 is JOB's real problem.
+
+## Extended calibration (parameters the 5-unit model leaves out)
+
+`calibrate_3_extended.py` measures the cost-relevant parameters beyond the five units;
+results in `postgres_cost_units_extended.json`. Findings on this machine:
+
+| parameter | measured | PG default | verdict |
+|---|---|---|---|
+| `parallel_setup_cost` | ~1,397 units (1.6 ms) | 1000 | default ~right |
+| `parallel_tuple_cost` | 0.0069 units (8 ns) | 0.1 | default overprices 14x |
+| `procost(texteq)` | 1.8 | 1 | close |
+| `procost(textlike)` | 13 | 1 | LIKE underpriced 13x |
+| `procost(textregexeq)` | 80 | 1 | regex underpriced 80x |
+| `effective_io_concurrency` | locked at 0 | 0 | macOS lacks posix_fadvise |
+| `jit_*_cost` | n/a | 100k/500k | JIT unavailable in this build |
+| `effective_cache_size` | ~12 GB (capacity) | 4 GB | state itself is not a constant |
+
+To apply the string-function costs to a database (catalog change, per-DB):
+```sql
+ALTER FUNCTION texteq(text,text) COST 1.8;
+ALTER FUNCTION textlike(text,text) COST 13;
+ALTER FUNCTION textregexeq(text,text) COST 80;
+```
