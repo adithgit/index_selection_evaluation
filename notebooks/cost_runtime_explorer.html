@@ -66,7 +66,7 @@ select{height:34px;border:1px solid #cfceca;border-radius:8px;padding:0 8px;font
     <label class="chk"><input type="checkbox" id="e-mysql" disabled><span style="width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent;border-bottom:11px solid #E0852A;display:inline-block;"></span>MySQL</label></div>
   <label class="chk" style="margin-left:2px;"><input type="checkbox" id="slower-only"> only ran slower (actual &lt; 1&times;)</label>
   <div style="display:flex;gap:6px;align-items:center;margin-left:auto;"><span style="font-size:12px;color:#5f5e5a;">View</span>
-    <button class="ctl-btn on" id="v-speedup">Predicted vs Actual Speedup</button><button class="ctl-btn" id="v-cost">Predicted vs Actual Cost</button><button class="ctl-btn" id="v-fig4">Predicted Query Time</button><button class="ctl-btn" id="v-fig4act">Actual Query Time</button></div>
+    <button class="ctl-btn on" id="v-speedup">Predicted vs Actual Speedup</button><button class="ctl-btn" id="v-cost">Predicted vs Actual Cost</button><button class="ctl-btn" id="v-fig4">Predicted Query Time</button><button class="ctl-btn" id="v-fig4act">Actual Query Time</button><button class="ctl-btn" id="v-speedcmp">Speedup: Default vs Calibrated</button></div>
 </div>
 <div id="cards" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:16px;"></div>
 <div id="view-speedup">
@@ -92,6 +92,11 @@ select{height:34px;border:1px solid #cfceca;border-radius:8px;padding:0 8px;font
 <h3 style="font-size:15px;color:#33322e;font-weight:600;margin:26px 0 4px;">Actual query time per query</h3>
 <div class="legend"><span style="color:#888780;">Grouped bars = real measured execution time (ms) per query, one bar per algorithm, at the selected budget for the first checked DB &mdash; the physical counterpart to the Predicted Query Time view. Each algorithm bar reflects its own selected indexes; no_index is the shared baseline. Log scale.</span></div>
 <div style="position:relative;width:100%;height:420px;"><canvas id="exp4act"></canvas></div>
+</div>
+<div id="view-speedcmp" style="display:none;">
+<h3 style="font-size:15px;color:#33322e;font-weight:600;margin:26px 0 4px;">Actual workload speedup: Default vs Calibrated vs Calibrated (full)</h3>
+<div class="legend"><span style="color:#888780;">One bar group per budget, for the selected algorithm &amp; first checked DB. Height = total no-index actual runtime &divide; total actual runtime with the selected indexes &mdash; real measured speedup, computed the same way for every cost model, so directly comparable (no cost units involved). Dashed line = 1&times; (no benefit). Missing bars = that budget/cost-model combination was not run. <b>JOB caveat:</b> baseline = first completed no-index run per cost model (site convention throughout, but noisier for JOB, whose runs vary run-to-run) &mdash; magnitudes and even which model wins at a given budget can differ from the rigorously-validated median-of-6-runs figures reported in <code>calibration/README.md</code>. TPC-H figures match the validated numbers exactly.</span></div>
+<div style="position:relative;width:100%;height:420px;"><canvas id="expcmp"></canvas></div>
 </div>
 <script>
 const BUDGETS=[250, 500, 1000, 1750, 2500, 3000, 3500, 4000, 4500, 5000, 6250, 7500, 10000, 12500, 15000];
@@ -138,7 +143,7 @@ const BUDGETS_CAL2=[250,500,1000,1750,2500,3000,3500,4000,4500,5000,6250,7500,10
 const ENG={postgres:{label:'Postgres',ps:'circle',fill:'rgba(45,127,211,0.74)',bd:'#185FA5',txt:'#185FA5'},db2:{label:'DB2',ps:'rect',fill:'rgba(29,158,117,0.74)',bd:'#0F6E56',txt:'#0F6E56'},mysql:{label:'MySQL',ps:'triangle',fill:'rgba(224,133,42,0.80)',bd:'#8A560F',txt:'#8A560F'}};
 const ORDER=['postgres','db2','mysql'];
 const state={algo:'relaxation',budget:'5000',workload:'tpch',view:'speedup',eng:{postgres:true,db2:false,mysql:false},slowerOnly:false,calibrated:false,calV2:false};
-let chart=null; let chart2=null; let chart4=null; let chart4e=null; const CAP=1e8;
+let chart=null; let chart2=null; let chart4=null; let chart4e=null; let chartcmp=null; const CAP=1e8;
 const fmt=v=>v>=1e7?v.toExponential(1):v>=1e6?(v/1e6).toFixed(1)+'M':v>=1e3?(v/1e3).toFixed(0)+'k':v>=10?Math.round(v):v>=1?v.toFixed(1):v.toFixed(2);
 function curData(){return state.calibrated?(state.workload==='tpch'?(state.calV2?DATA_CAL2_TPCH:DATA_CAL_TPCH):(state.calV2?DATA_CAL2:DATA_CAL)):(state.workload==='tpch'?DATA_TPCH:DATA);}
 function curAbs(){return state.calibrated?(state.workload==='tpch'?(state.calV2?DATAABS_CAL2_TPCH:DATAABS_CAL_TPCH):(state.calV2?DATAABS_CAL2:DATAABS_CAL)):(state.workload==='tpch'?DATAABS_TPCH:DATAABS);}
@@ -162,8 +167,12 @@ function barChart(cid,labels,datasets,logy,ytext){return new Chart(document.getE
 function renderFig4(){const db=fig4db();const mainQ=state.workload==='tpch'?TPCH_FIG4_MAIN:JOB_QNAMES;const logy=state.workload!=='tpch';if(chart4)chart4.destroy();chart4=barChart('exp4',mainQ.map(q=>'q'+q),barDatasets(mainQ,db,'main'),logy,(state.calibrated?'Predicted time (ms, ':'Predicted cost (')+(logy?'log':'linear')+')');const ew=document.getElementById('fig4-exp-wrap');if(state.workload==='tpch'&&!state.calibrated){ew.style.display='';if(chart4e)chart4e.destroy();chart4e=barChart('exp4exp',['q2','q17','q20'],barDatasets(['2','17','20'],db,'exp'),true,'Predicted cost (log)');}else{ew.style.display='none';}}
 function updateLabels(){var cal=state.calibrated;function set(id,txt){var el=document.getElementById(id);if(!el)return;if(!el.dataset.orig)el.dataset.orig=el.textContent;el.textContent=cal?txt:el.dataset.orig;}set('v-cost','Predicted vs Actual Runtime');set('vc-h3','Predicted runtime vs actual runtime');set('vf-h3','Predicted runtime per query (Figure 4 style)');set('fx-num','predicted runtime (no index)');set('fx-den','predicted runtime (with indexes)');set('vc-desc','Each point is one query at the selected algorithm & budget. Both axes are in ms (calibrated cost \u00d7 measured ms/unit). If the calibrated model were perfect, points would lie on the y = x line.');set('vf-desc','Grouped bars = predicted execution time in ms (calibrated cost \u00d7 measured ms/unit) per query, one bar per algorithm, at the selected budget for the first checked DB.');set('fx-note','Both per query, against the same no-index baseline. On the diagonal (x = y) the calibrated prediction is a faithful proxy for runtime.');}
 let chart4act=null;
+function absFor(model){if(model==='default')return state.workload==='tpch'?DATAABS_TPCH:DATAABS;if(model==='cal')return state.workload==='tpch'?DATAABS_CAL_TPCH:DATAABS_CAL;return state.workload==='tpch'?DATAABS_CAL2_TPCH:DATAABS_CAL2;}
+function actBaselineFor(model,db){if(model==='default')return state.workload==='tpch'?NOIDX_TPCH_ACT:((NOIDX_JOB_ACT[db])||{});if(model==='cal')return state.workload==='tpch'?NOIDX_CAL_TPCH_ACT:((NOIDX_CAL_ACT[db])||{});return state.workload==='tpch'?NOIDX_CAL2_TPCH_ACT:((NOIDX_CAL_ACT[db])||{});}
+function actualSpeedupByBudget(model){const db=fig4db();const abs=absFor(model);const base=actBaselineFor(model,db);const algoAbs=(abs[state.algo]||{});const out={};Object.keys(algoAbs).forEach(b=>{const pts=(algoAbs[b]||{})[db]||[];if(!pts.length)return;let sumAct=0,sumBase=0,n=0;pts.forEach(p=>{const bv=base[p[2]];if(bv!=null){sumAct+=p[1];sumBase+=bv;n++;}});if(n&&sumAct>0)out[b]=sumBase/sumAct;});return out;}
+function renderSpeedCmp(){const models=[['default','Default','#9a9891'],['cal','Calibrated','#2D7FD3'],['cal2','Calibrated (full)','#1D9E75']];const perModel=models.map(m=>actualSpeedupByBudget(m[0]));const budgetsUnion=[...new Set(perModel.flatMap(o=>Object.keys(o).map(Number)))].sort((a,b)=>a-b);const datasets=models.map((m,i)=>({label:m[1],backgroundColor:m[2],borderColor:m[2],borderWidth:0,data:budgetsUnion.map(b=>perModel[i][b]!=null?perModel[i][b]:null)}));if(chartcmp)chartcmp.destroy();chartcmp=new Chart(document.getElementById('expcmp'),{type:'bar',data:{labels:budgetsUnion.map(b=>b.toLocaleString()+' MB'),datasets},options:{responsive:true,maintainAspectRatio:false,layout:{padding:{top:6,right:10}},plugins:{legend:{display:true,position:'top',labels:{color:'#5f5e5a',font:{size:11},boxWidth:12}},tooltip:{callbacks:{label:c=>c.dataset.label+': '+(c.parsed.y==null?'n/a':c.parsed.y.toFixed(2)+'\u00d7')}},annotation:{annotations:{one:{type:'line',yMin:1,yMax:1,borderColor:'#888780',borderWidth:1.5,borderDash:[6,5],label:{display:true,content:'1\u00d7 (no benefit)',position:'end',color:'#888780',font:{size:11},backgroundColor:'transparent'}}}}},scales:{x:{grid:{display:false},ticks:{color:'#5f5e5a',font:{size:10}}},y:{type:'logarithmic',title:{display:true,text:'Actual workload speedup (\u00d7, log)',color:'#5f5e5a',font:{size:12}},grid:{color:'rgba(0,0,0,0.07)'},ticks:{color:'#5f5e5a',callback:v=>[0.1,0.2,0.5,1,2,5,10,20,50].indexOf(v)>=0?fmt(v)+'\u00d7':''}}}}});}
 function renderFig4Act(){const db=fig4db();const mainQ=state.workload==='tpch'?TPCH_FIG4_MAIN:JOB_QNAMES;if(chart4act)chart4act.destroy();chart4act=barChart('exp4act',mainQ.map(q=>'q'+q),barDatasets(mainQ,db,'main','actual'),true,'Actual query time (ms, log)');}
-function render(){updateLabels();renderCards();renderChart();renderChart2();renderFig4();renderFig4Act();}
+function render(){updateLabels();renderCards();renderChart();renderChart2();renderFig4();renderFig4Act();renderSpeedCmp();}
 function setAlgo(a){if(state.calibrated&&a==='extend')exitCalibrated();state.algo=a;['extend','db2advis','relaxation'].forEach(x=>document.getElementById('a-'+x).classList.toggle('on',x===a));render();}
 document.getElementById('a-extend').onclick=()=>setAlgo('extend');
 document.getElementById('a-db2advis').onclick=()=>setAlgo('db2advis');
@@ -176,11 +185,12 @@ function setCostModel(m){var on=(m!=='default');state.calibrated=on;state.calV2=
 document.getElementById('c-default').onclick=()=>setCostModel('default');
 document.getElementById('c-cal').onclick=()=>setCostModel('calibrated');
 document.getElementById('c-cal2').onclick=()=>setCostModel('cal2');
-function setView(v){state.view=v;['speedup','cost','fig4','fig4act'].forEach(x=>{document.getElementById('view-'+x).style.display=(x===v)?'':'none';document.getElementById('v-'+x).classList.toggle('on',x===v);});render();}
+function setView(v){state.view=v;['speedup','cost','fig4','fig4act','speedcmp'].forEach(x=>{document.getElementById('view-'+x).style.display=(x===v)?'':'none';document.getElementById('v-'+x).classList.toggle('on',x===v);});render();}
 document.getElementById('v-speedup').onclick=()=>setView('speedup');
 document.getElementById('v-cost').onclick=()=>setView('cost');
 document.getElementById('v-fig4').onclick=()=>setView('fig4');
 document.getElementById('v-fig4act').onclick=()=>setView('fig4act');
+document.getElementById('v-speedcmp').onclick=()=>setView('speedcmp');
 budSel.onchange=e=>{state.budget=e.target.value;render();};
 ORDER.forEach(db=>{document.getElementById('e-'+db).onchange=e=>{exitCalibrated();state.eng[db]=e.target.checked;render();};});
 document.getElementById('slower-only').onchange=e=>{state.slowerOnly=e.target.checked;render();};
