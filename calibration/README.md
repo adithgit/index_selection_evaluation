@@ -5,6 +5,22 @@ profiling method of Wu et al., *"Predicting Query Execution Time: Are Optimizer
 Cost Models Really Unusable?"* (ICDE 2013): CPU units measured **warm** (in
 `shared_buffers`, no I/O), I/O units measured **cold** (real disk reads).
 
+## Two calibration generations
+
+| directory | target | outputs |
+|---|---|---|
+| `pg15/` | PostgreSQL 15 (the main benchmark instance) | `postgres_cost_units.json`, `postgres_cost_units_extended.json` |
+| `pglab/` | pg_lab PG 18 on port 5433 (cardinality-injection instance) | `postgres_cost_units_pglab.json`, `calib_extended_pglab.json`, `procost_pglab_{apply,revert}.sql` |
+
+The two are calibrated separately because the units are hardware *and* version
+specific: `random_page_cost` calibrates to ~80 on PG 15 but ~13.7 on PG 18,
+whose asynchronous I/O makes sequential reads substantially slower. Use the
+`pglab/` set for anything on port 5433, and `pg15/` for the main evaluation.
+
+The `procost_pglab_*.sql` pair applies and reverts the string-function `COST`
+overrides as a catalog change; the measurement scripts apply it only around the
+calibrated pass.
+
 ## Applying it — trigger calibrated costs, or use defaults
 
 Controlled by the `PG_COST_GUCS` environment variable, read by
@@ -15,7 +31,7 @@ timed query.
 | `PG_COST_GUCS` | Behaviour |
 |----------------|-----------|
 | *(unset)* | **Stock PostgreSQL defaults** (`random_page_cost=4`, …) |
-| `calibrated` | Load `calibration/postgres_cost_units.json` |
+| `calibrated` | Load `calibration/pg15/postgres_cost_units.json` |
 | `"random_page_cost=80;cpu_tuple_cost=0.035"` | Explicit `;`-separated GUCs |
 
 ```bash
@@ -34,15 +50,15 @@ calibrated result CSVs separate from the default ones.
 Two phases, because the I/O units must be measured on a **cold** cache:
 
 ```bash
-python calibration/calibrate_1_cpu_warm.py          # builds tables, measures CPU units warm
+python calibration/pg15/calibrate_1_cpu_warm.py     # builds tables, measures CPU units warm
 brew services restart postgresql@15 && sleep 4 && sudo purge   # clear shared_buffers + OS cache
-python calibration/calibrate_2_io_cold.py           # measures I/O cold, writes postgres_cost_units.json
+python calibration/pg15/calibrate_2_io_cold.py      # measures I/O cold, writes postgres_cost_units.json
 ```
 
 Phase 2 prints read-vs-hit blocks so you can confirm the reads were genuinely cold
-(`hit_blocks` should be ~0). Intermediate state lives in `calibration/_partial.json`.
+(`hit_blocks` should be ~0). Intermediate state lives in `calibration/pg15/_partial.json`.
 
-## Current calibration (see `postgres_cost_units.json`)
+## Current calibration (see `pg15/postgres_cost_units.json`)
 
 `random_page_cost` ≈ **80** (vs default 4): on cold reads a random page is ~80× a
 sequential one. **Caveat:** this is the *cold*-disk cost; a cache-resident workload
@@ -76,8 +92,8 @@ improvement even when raw runtime moved the other way.
 
 ## Extended calibration (parameters the 5-unit model leaves out)
 
-`calibrate_3_extended.py` measures the cost-relevant parameters beyond the five units;
-results in `postgres_cost_units_extended.json`. Findings on this machine:
+`pg15/calibrate_3_extended.py` measures the cost-relevant parameters beyond the five units;
+results in `pg15/postgres_cost_units_extended.json`. Findings on this machine:
 
 | parameter | measured | PG default | verdict |
 |---|---|---|---|

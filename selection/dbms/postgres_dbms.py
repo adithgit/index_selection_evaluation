@@ -40,14 +40,14 @@ class PostgresDatabaseConnector(DatabaseConnector):
         # for the whole session (every what-if EXPLAIN and every timed query),
         # immune to rollback in the cost-estimation loop. See calibration/README.md.
         #   (unset)                 -> stock PostgreSQL defaults
-        #   PG_COST_GUCS=calibrated -> load calibration/postgres_cost_units.json
+        #   PG_COST_GUCS=calibrated -> load calibration/pg15/postgres_cost_units.json
         #   PG_COST_GUCS="random_page_cost=80;cpu_tuple_cost=0.035"  -> explicit GUCs
         gucs = os.environ.get("PG_COST_GUCS", "").strip()
         if not gucs:
             return None
         if gucs.lower() == "calibrated":
             path = os.path.join(
-                os.path.dirname(__file__), "..", "..", "calibration",
+                os.path.dirname(__file__), "..", "..", "calibration", "pg15",
                 "postgres_cost_units.json"
             )
             with open(path) as f:

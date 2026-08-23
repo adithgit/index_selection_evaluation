@@ -1,0 +1,39 @@
+{
+  "parallel_setup_cost": {
+    "ms": 1.58,
+    "units": 256.2,
+    "pg_default": 1000
+  },
+  "parallel_tuple_cost": {
+    "ms": 5.779105889724306e-06,
+    "units": 0.00094,
+    "pg_default": 0.1
+  },
+  "procost": {
+    "texteq": {
+      "ns_per_row": 0.0,
+      "procost_measured": 0.0,
+      "procost_catalog": 1
+    },
+    "textlike": {
+      "ns_per_row": 23.3,
+      "procost_measured": 10.6,
+      "procost_catalog": 1
+    },
+    "textregexeq": {
+      "ns_per_row": 151.2,
+      "procost_measured": 68.7,
+      "procost_catalog": 1
+    }
+  },
+  "jit": {
+    "available": false
+  },
+  "effective_cache_size": {
+    "recommended_gb": 12,
+    "pg_default_gb": 4
+  },
+  "effective_io_concurrency": {
+    "skipped": "macOS lacks posix_fadvise (prior finding); PG18 io_method=worker untested"
+  }
+}
