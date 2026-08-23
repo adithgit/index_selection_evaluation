@@ -1,0 +1,1 @@
+select movie_id from movie_info where movie_id = 42;

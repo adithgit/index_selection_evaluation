@@ -1,0 +1,21 @@
+{
+  "it": 1,
+  "k": 30,
+  "mi_idx": 8322,
+  "mk": 4523930,
+  "t": 391666,
+  "it,mi_idx": 305,
+  "k,mk": 12951,
+  "mi_idx,mk": 131564,
+  "mi_idx,t": 840,
+  "mk,t": 299534,
+  "it,mi_idx,mk": 6032,
+  "it,mi_idx,t": 72,
+  "k,mi_idx,mk": 306,
+  "k,mk,t": 405,
+  "mi_idx,mk,t": 8496,
+  "it,k,mi_idx,mk": 21,
+  "it,mi_idx,mk,t": 1070,
+  "k,mi_idx,mk,t": 20,
+  "it,k,mi_idx,mk,t": 6
+}

@@ -1,0 +1,50 @@
+                                                                          QUERY PLAN                                                                          
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Finalize Aggregate  (cost=307720.90..307720.91 rows=1 width=32) (actual rows=1.00 loops=1)
+   Buffers: shared hit=62794 read=182273
+   ->  Gather  (cost=307720.69..307720.90 rows=2 width=32) (actual rows=3.00 loops=1)
+         Workers Planned: 2
+         Workers Launched: 2
+         Buffers: shared hit=62794 read=182273
+         ->  Partial Aggregate  (cost=306720.69..306720.70 rows=1 width=32) (actual rows=1.00 loops=3)
+               Buffers: shared hit=62794 read=182273
+               ->  Parallel Hash Join  (cost=51053.62..306720.05 rows=253 width=17) (actual rows=2416.67 loops=3)
+                     Hash Cond: (mi.movie_id = t.id)
+                     Buffers: shared hit=62794 read=182273
+                     ->  Parallel Seq Scan on movie_info mi  (cost=0.03..254555.40 rows=296243 width=4) (actual rows=235558.00 loops=3)
+                           Filter: ((info)::text = ANY ('{Sweden,Norway,Germany,Denmark,Swedish,Denish,Norwegian,German,USA,American}'::text[]))
+                           Rows Removed by Filter: 4709682
+                           Buffers: shared hit=5576 read=160181
+                     ->  Parallel Hash  (cost=51052.02..51052.02 rows=126 width=25) (actual rows=2624.67 loops=3)
+                           Buckets: 8192 (originally 1024)  Batches: 1 (originally 1)  Memory Usage: 696kB
+                           Buffers: shared hit=57218 read=22092
+                           ->  Nested Loop  (cost=2685.72..51052.02 rows=126 width=25) (actual rows=2624.67 loops=3)
+                                 Buffers: shared hit=57218 read=22092
+                                 ->  Hash Join  (cost=2685.29..50963.20 rows=182 width=4) (actual rows=4317.00 loops=3)
+                                       Hash Cond: (mk.keyword_id = k.id)
+                                       Buffers: shared hit=5412 read=22092
+                                       ->  Parallel Seq Scan on movie_keyword mk  (cost=0.00..43329.71 rows=1884971 width=8) (actual rows=1507976.67 loops=3)
+                                             Buffers: shared hit=2388 read=22092
+                                       ->  Hash  (cost=2685.12..2685.12 rows=13 width=4) (actual rows=30.00 loops=3)
+                                             Buckets: 1024  Batches: 1  Memory Usage: 10kB
+                                             Buffers: shared hit=3024
+                                             ->  Seq Scan on keyword k  (cost=0.00..2685.12 rows=13 width=4) (actual rows=30.00 loops=3)
+                                                   Filter: ((keyword)::text ~~ '%sequel%'::text)
+                                                   Rows Removed by Filter: 134140
+                                                   Buffers: shared hit=3024
+                                 ->  Index Scan using title_pkey on title t  (cost=0.43..0.49 rows=1 width=21) (actual rows=0.61 loops=12951)
+                                       Index Cond: (id = mk.movie_id)
+                                       Filter: (production_year > 1990)
+                                       Rows Removed by Filter: 0
+                                       Index Searches: 12951
+                                       Buffers: shared hit=51806
+ Planning:
+   Buffers: shared hit=358
+ Planning Time: 0.622 ms
+ JIT:
+   Functions: 95
+   Options: Inlining false, Optimization false, Expressions true, Deforming true
+ Execution Time: 676.213 ms
+ Optimizer: planner=Custom Hook joinorder=Dynamic Programming
+(46 rows)
+

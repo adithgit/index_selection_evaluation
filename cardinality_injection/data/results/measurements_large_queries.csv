@@ -1,0 +1,7 @@
+query,units,cards,est_cost,actual_ms,join_order
+28b,calibrated,default,289736.16,919.445,((mk ((((((mc ((mi ((mi_idx (cc cct1)) it2)) it1)) ct) cn) t) kt) cct2)) k)
+28b,calibrated,injected,292436.66,791.256,((((mk (((((mi (mc (mi_idx ((cc cct1) cct2)))) it1) cn) t) kt)) k) ct) it2)
+29b,calibrated,default,727541.9,2804.144,((((pi (mk (an ((((((mc (((mi (ci rt)) it) t)) chn) n) cc) cct2) cct1)))) it3) cn) k)
+29b,calibrated,injected,728873.59,1915.167,(((mc ((mi ((pi ((((((an (ci ((mk k) t))) chn) n) cc) cct2) rt)) it3)) it)) cn) cct1)
+30c,calibrated,default,626889.48,1725.476,((mi_idx (((ci ((mk ((mi ((cc cct1) cct2)) it1)) k)) n) t)) it2)
+30c,calibrated,injected,633035.47,1432.011,((mi_idx ((mi ((((mk (ci ((cc cct2) cct1))) k) t) n)) it1)) it2)

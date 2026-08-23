@@ -1,0 +1,16 @@
+[
+  "an,cc,cct1,cct2,ci,cn,k,mc,mi,mk,n,pi,rt",
+  "an,cc,cct1,cct2,ci,it,k,mc,mi,mk,n,pi",
+  "an,cc,cct1,cct2,ci,it,k,mc,mi,mk,pi,t",
+  "an,cc,cct1,cct2,ci,it,k,mc,mi,mk,t",
+  "an,cc,cct1,ci,cn,it,k,mc,mi,mk,t",
+  "an,cc,cct1,ci,it,k,mc,mi,mk,rt,t",
+  "an,cc,cct1,ci,it,mc,mi,mk,t",
+  "an,cc,cct2,ci,cn,it,k,mc,mi,mk,n,pi",
+  "an,cc,cct2,ci,cn,it,k,mc,mi,mk,t",
+  "an,cc,cct2,ci,it,k,mc,mi,mk,rt,t",
+  "an,cc,cct2,ci,it,mc,mi,mk,t",
+  "cc,cct1,cct2,ci,cn,it,mc,mi,mk,n,pi,rt,t",
+  "cc,chn,ci,cn,k,mc,mk,n,pi,t",
+  "cc,chn,ci,cn,k,mc,mk,pi,t"
+]
